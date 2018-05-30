@@ -24,7 +24,8 @@ class RNN():
 
     def __init__(self):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-        self.response_folder = '~/Documents/Metis/project4'
+        #self.response_folder = '~/Documents/Metis/project4'
+        self.response_folder = '~/Friends_text_generator
         self.response_folder = os.path.expanduser(self.response_folder)
 
 
