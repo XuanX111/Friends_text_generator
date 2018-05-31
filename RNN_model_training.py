@@ -112,7 +112,7 @@ class RNN():
         checkpoint = ModelCheckpoint(filepath, monitor='loss', verbose=1, save_best_only=True, mode='min')
         callbacks_list = [checkpoint]
 
-        self.model.fit(X, y, epochs=1, batch_size=128, callbacks=callbacks_list)
+        self.model.fit(X, y, epochs=100, batch_size=128, callbacks=callbacks_list)
 
 
     # pick a random seed
