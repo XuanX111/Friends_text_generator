@@ -25,7 +25,7 @@ class RNN():
     def __init__(self):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         #self.response_folder = '~/Documents/Metis/project4'
-        self.response_folder = '~/Friends_text_generator
+        self.response_folder = '~/Friends_text_generator'
         self.response_folder = os.path.expanduser(self.response_folder)
 
 
@@ -73,18 +73,19 @@ class RNN():
 
         raw_text = df_diag.iloc[character].diag_filt
         df = df_diag.iloc[character]['char_to_int_diag']
-        print(df)
+        # print(df)
         for i in range(0, self.n_chars - self.seq_length, 1):
             seq_in = raw_text[i:i + self.seq_length]
             # print(seq_in)
             seq_out = raw_text[i + self.seq_length]
             self.dataX.append([df[char] for char in seq_in])
             self.dataY.append(df[seq_out])
-
+        # print(self.dataX)
         n_patterns = len(self.dataX)
         print("Total Patterns: ", n_patterns)
         # reshape X to be [samples, time steps, features]
         X = numpy.reshape(self.dataX, (n_patterns, self.seq_length, 1))
+        print(X)
         # normalize
         X = X / float(self.n_vocab)
         # one hot encode the output variable
@@ -116,7 +117,8 @@ class RNN():
 
         int_to_char = dict((i, c) for i, c in enumerate(chars))
         start = numpy.random.randint(0, len(self.dataX) - 1)
-        pattern = self.dataX[start]
+        # pattern = self.dataX[start]
+        pattern = ["I’ll be fine, alright? Really, everyone. I hope she’ll be very happy."]
         print("Seed:")
         print("\"", ''.join([int_to_char[value] for value in pattern]), "\"")
         # generate characters
@@ -180,7 +182,7 @@ def main():
 
     # train Phoebe
     for i in range(6):
-        X,y = diag.rnnPrep(100, df_diag,character=0)
+        X,y = diag.rnnPrep(100, df_diag,character=i)
         model = diag.rnnTrain(X,y)
 
         diag.writeOutput(diag.dataX,f'datax{i}.pkl')
