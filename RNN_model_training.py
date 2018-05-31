@@ -5,6 +5,7 @@ from keras.layers import Dropout
 from keras.layers import LSTM
 from keras.callbacks import ModelCheckpoint
 from keras.utils import np_utils
+from keras.utils import multi_gpu_model
 import types
 import tempfile
 import keras.models
@@ -24,8 +25,8 @@ class RNN():
 
     def __init__(self):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-        #self.response_folder = '~/Documents/Metis/project4'
-        self.response_folder = '~/Friends_text_generator'
+        self.response_folder = '~/Documents/Metis/project4'
+        #self.response_folder = '~/Friends_text_generator'
         self.response_folder = os.path.expanduser(self.response_folder)
 
 
@@ -47,7 +48,7 @@ class RNN():
     def cleandoc(self,text):
         table = str.maketrans('', '', string.punctuation)
         tokens = [w.translate(table) for w in text]
-        print(tokens)
+        # print(tokens)
         tokens = [word for word in tokens if word.isalpha()]
 
         return tokens
@@ -59,6 +60,8 @@ class RNN():
         # print(chars)
         char_to_int = dict((c, i) for i, c in enumerate(chars))
 
+
+
         self.n_chars = len(text)
         self.n_vocab = len(chars)
         # print("Total Characters: ", n_chars)
@@ -66,12 +69,13 @@ class RNN():
         # print(char_to_int)
         return char_to_int
 
-    def rnnPrep(self, length,df_diag,character=1):  # main_character = ['Phoebe:', 'Rachel:', 'Ross:', 'Monica:', 'Chandler:', 'Joey:']
+    def rnnPrep(self, length,df_diag,character):  # main_character = ['Phoebe:', 'Rachel:', 'Ross:', 'Monica:', 'Chandler:', 'Joey:']
         self.seq_length = length
         self.dataX = []
         self.dataY = []
 
         raw_text = df_diag.iloc[character].diag_filt
+        print(raw_text)
         df = df_diag.iloc[character]['char_to_int_diag']
         # print(df)
         for i in range(0, self.n_chars - self.seq_length, 1):
@@ -85,7 +89,7 @@ class RNN():
         print("Total Patterns: ", n_patterns)
         # reshape X to be [samples, time steps, features]
         X = numpy.reshape(self.dataX, (n_patterns, self.seq_length, 1))
-        print(X)
+        # print(X)
         # normalize
         X = X / float(self.n_vocab)
         # one hot encode the output variable
@@ -95,37 +99,38 @@ class RNN():
 
     def rnnTrain(self,X,y):
         # define the LSTM model
-        model = Sequential()
-        model.add(LSTM(256, input_shape=(X.shape[1], X.shape[2])))
-        model.add(Dropout(0.2))
+        self.model = Sequential()
+        self.model.add(LSTM(256, input_shape=(X.shape[1], X.shape[2])))
+        self.model.add(Dropout(0.2))
         # model.add(LSTM)
-        model.add(Dense(y.shape[1], activation='softmax'))
-        model.compile(loss='categorical_crossentropy', optimizer='adam',metrics=['accuracy'])
-
+        self.model.add(Dense(y.shape[1], activation='softmax'))
+        # parallel_model = multi_gpu_model(model,gpus=2)
+        # parallel_model.compile(loss='categorical_crossentropy', optimizer='adam',metrics=['accuracy'])
+        self.model.compile(loss='categorical_crossentropy', optimizer='adam',metrics=['accuracy'])
         # define the checkpoint
         filepath = "weights-improvement-{epoch:02d}-{loss:.4f}.hdf5"
         checkpoint = ModelCheckpoint(filepath, monitor='loss', verbose=1, save_best_only=True, mode='min')
         callbacks_list = [checkpoint]
 
-        model.fit(X, y, epochs=100, batch_size=128, callbacks=callbacks_list)
-        return model
+        self.model.fit(X, y, epochs=1, batch_size=128, callbacks=callbacks_list)
+
 
     # pick a random seed
-    def textgenerate(self,df_diag,model,character=1):
+    def textgenerate(self,df_diag,character):
 
         chars = sorted(list(set(df_diag.iloc[character].diag_filt)))
 
         int_to_char = dict((i, c) for i, c in enumerate(chars))
-        start = numpy.random.randint(0, len(self.dataX) - 1)
-        # pattern = self.dataX[start]
-        pattern = ["I’ll be fine, alright? Really, everyone. I hope she’ll be very happy."]
+        # start = numpy.random.randint(0, len(self.dataX) - 1)
+        pattern = self.dataX[0]
+        # print(pattern)
         print("Seed:")
         print("\"", ''.join([int_to_char[value] for value in pattern]), "\"")
         # generate characters
-        for i in range(50):
+        for i in range(100):
             x = numpy.reshape(pattern, (1, len(pattern), 1))
             x = x / float(self.n_vocab)
-            prediction = model.predict(x, verbose=0)
+            prediction = self.model.predict(x, verbose=0)
             index = numpy.argmax(prediction)
             result = int_to_char[index]
             seq_in = [int_to_char[value] for value in pattern]
@@ -133,7 +138,7 @@ class RNN():
             pattern.append(index)
             pattern = pattern[1:len(pattern)]
 
-        print("\"", ''.join([int_to_char[value] for value in pattern]), "\"")
+        # print("\"", ''.join([int_to_char[value] for value in pattern]), "\"")
         print("\nDone.")
 
 
@@ -158,12 +163,18 @@ class RNN():
         cls.__getstate__ = __getstate__
         cls.__setstate__ = __setstate__
 
-    def writeOutput(self, file, filename):
+    def writeOutput(self, file,filename):
 
-        self.make_keras_picklable()
+
+        # self.make_keras_picklable()
 
         with open(os.path.join(self.response_folder, filename), 'wb') as fo:
             pickle.dump(file, fo)
+
+
+    def writemodel(self,filename):
+        f = open(os.path.join(self.response_folder, filename), 'wb')
+        self.model.save(os.path.join(self.response_folder, filename))
 
 
 def main():
@@ -176,23 +187,25 @@ def main():
     df_diag['expression'], df_diag['diag_filt'] = zip(*df_diag['diag'].map(diag.sepExp))
     df_diag['diag_filt_clean']  = df_diag['diag_filt'].apply(diag.cleandoc)
     df_diag['char_to_int_diag'] = df_diag['diag_filt'].apply(diag.processing)
+    # print(df_diag.char_to_int_diag[0])
     df_diag['char_to_int_expr'] = df_diag['expression'].apply(diag.processing)
     print(df_diag)
     print('Done transformation')
 
     # train Phoebe
-    for i in range(6):
-        X,y = diag.rnnPrep(100, df_diag,character=i)
-        model = diag.rnnTrain(X,y)
+    for i in range(0,6):
+        X,y = diag.rnnPrep(100, df_diag,i)
+        diag.rnnTrain(X,y)
 
         diag.writeOutput(diag.dataX,f'datax{i}.pkl')
         diag.writeOutput(diag.dataY,f'datay{i}.pkl')
+        diag.writemodel(f'model{i}.h5')
+        # diag.writeOutput(model,f"{i}.pkl")
 
-        diag.writeOutput(model,f"{i}.pkl")
         print('Done trining')
         # model = diag.readinput('Phobe.pkl')
         # print('done loading model')
-        diag.textgenerate(df_diag,model,character = 0)
+        diag.textgenerate(df_diag,i)
 
 
 if __name__ == "__main__":
